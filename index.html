@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draw Generator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: monospace;
+    font-size: 14px;
+    background: #fff;
+    color: #000;
+    padding: 24px;
+    max-width: 640px;
+  }
+
+  h1 { font-size: 16px; margin-bottom: 16px; }
+
+  hr { border: none; border-top: 1px solid #ccc; margin: 16px 0; }
+
+  .tabs { display: flex; gap: 16px; margin-bottom: 10px; }
+  .tab { background: none; border: none; font: inherit; cursor: pointer; padding: 0; color: #999; }
+  .tab.active { color: #000; text-decoration: underline; }
+
+  .row { display: flex; gap: 6px; margin-bottom: 6px; }
+
+  input[type="text"], input[type="number"], textarea {
+    font: inherit;
+    border: 1px solid #999;
+    padding: 4px 6px;
+    background: #fff;
+    color: #000;
+  }
+
+  input[type="text"] { flex: 1; }
+  input[type="number"] { width: 70px; }
+
+  textarea {
+    width: 100%;
+    height: 120px;
+    resize: vertical;
+    display: block;
+  }
+
+  button.action {
+    font: inherit;
+    background: #000;
+    color: #fff;
+    border: none;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+
+  button.action:disabled { background: #ccc; cursor: default; }
+  button.action:not(:disabled):hover { background: #333; }
+
+  button.link {
+    font: inherit;
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    font-size: 12px;
+  }
+
+  button.link:hover { color: #c00; }
+
+  #error { color: #c00; font-size: 12px; margin-top: 6px; display: none; }
+
+  #team-list { margin-top: 10px; }
+
+  .team-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    border-bottom: 1px solid #eee;
+  }
+
+  #team-count { font-size: 12px; color: #666; margin-top: 6px; }
+  #team-count.warn { color: #c00; }
+
+  #generate-btn { margin-top: 12px; width: 100%; padding: 8px; }
+
+  #draw-output { display: none; }
+
+  .bracket-label { font-size: 12px; color: #666; margin: 14px 0 4px; }
+
+  .pairing-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+  }
+
+  .room-num { color: #999; font-size: 12px; min-width: 52px; }
+  .p-team { flex: 1; }
+  .p-pts   { color: #666; font-size: 12px; min-width: 28px; text-align: right; }
+  .p-vs    { color: #999; }
+  .pullup  { color: #00a; }
+  .flag    { font-size: 11px; color: #c00; }
+  .swapped-flag { font-size: 11px; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>Draw Generator</h1>
+
+<div class="tabs">
+  <button class="tab active" id="tab-manual" onclick="switchTab('manual')">Manual</button>
+  <button class="tab" id="tab-csv" onclick="switchTab('csv')">Paste CSV</button>
+  <button class="link" style="margin-left:auto" onclick="clearAllTeams()">clear all</button>
+</div>
+
+<!-- Manual pane -->
+<div id="pane-manual">
+  <div class="row">
+    <input type="text" id="team-name-input" placeholder="Team name" onkeydown="handleEnter(event)">
+    <input type="number" id="team-score-input" placeholder="pts" min="0" onkeydown="handleEnter(event)">
+    <button class="action" onclick="addTeam()">Add</button>
+  </div>
+</div>
+
+<!-- CSV pane -->
+<div id="pane-csv" style="display:none">
+  <textarea id="csv-input" placeholder="Oxford A, 3&#10;Cambridge B, 3&#10;Bristol A, 2" oninput="previewCSV()"></textarea>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px">
+    <span id="csv-hint" style="font-size:12px; color:#666"></span>
+    <button class="action" onclick="importCSV()">Import</button>
+  </div>
+</div>
+
+<div id="error"></div>
+<div id="team-list"></div>
+<div id="team-count"></div>
+<button class="action" id="generate-btn" onclick="generateDraw()" disabled>Generate draw</button>
+
+<hr>
+
+<div id="draw-output">
+  <strong id="draw-title">Draw</strong>
+  <span id="draw-meta" style="color:#666; font-size:12px; margin-left:8px"></span>
+  <div id="draw-pairings"></div>
+  <p style="font-size:11px; color:#999; margin-top:12px">↑ pulled up &nbsp;·&nbsp; [swapped] conflict swap &nbsp;·&nbsp; ⚠ conflict unresolved</p>
+</div>
+
+<script>
+let teams = [];
+let teamIdCounter = 0;
+
+// --- Tabs ---
+function switchTab(tab) {
+  document.getElementById('pane-manual').style.display = tab === 'manual' ? '' : 'none';
+  document.getElementById('pane-csv').style.display   = tab === 'csv'    ? '' : 'none';
+  document.getElementById('tab-manual').classList.toggle('active', tab === 'manual');
+  document.getElementById('tab-csv').classList.toggle('active', tab === 'csv');
+  hideError();
+}
+
+// --- Teams ---
+function addTeam() {
+  const nameInput  = document.getElementById('team-name-input');
+  const scoreInput = document.getElementById('team-score-input');
+  const name  = nameInput.value.trim();
+  const score = scoreInput.value.trim();
+  hideError();
+  if (!name) { showError('Enter a team name.'); return; }
+  if (score === '' || isNaN(Number(score)) || Number(score) < 0) { showError('Enter a valid score.'); return; }
+  if (teams.find(t => t.name.toLowerCase() === name.toLowerCase())) { showError(`"${name}" already exists.`); return; }
+  teams.push({ id: teamIdCounter++, name, points: Number(score) });
+  nameInput.value = '';
+  scoreInput.value = '';
+  nameInput.focus();
+  renderTeamList();
+}
+
+function removeTeam(id) {
+  teams = teams.filter(t => t.id !== id);
+  renderTeamList();
+}
+
+function clearAllTeams() {
+  if (!teams.length || !confirm('Remove all teams?')) return;
+  teams = [];
+  renderTeamList();
+  document.getElementById('draw-output').style.display = 'none';
+}
+
+function handleEnter(e) { if (e.key === 'Enter') addTeam(); }
+
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error').style.display = 'none';
+}
+
+function renderTeamList() {
+  const list    = document.getElementById('team-list');
+  const countEl = document.getElementById('team-count');
+  const btn     = document.getElementById('generate-btn');
+  list.innerHTML = '';
+  if (!teams.length) { countEl.textContent = ''; btn.disabled = true; return; }
+  const sorted = [...teams].sort((a, b) => b.points - a.points);
+  sorted.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'team-row';
+    row.innerHTML = `<span>${escapeHtml(t.name)} — ${t.points}</span>
+                     <button class="link" onclick="removeTeam(${t.id})">remove</button>`;
+    list.appendChild(row);
+  });
+  const odd = teams.length % 2 !== 0;
+  countEl.textContent = `${teams.length} team${teams.length !== 1 ? 's' : ''}${odd ? ' — odd, one team gets a bye' : ''}`;
+  countEl.className = odd ? 'warn' : '';
+  btn.disabled = teams.length < 2;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// --- CSV ---
+function parseCSVLines(raw) {
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const valid = [], errors = [];
+  lines.forEach((line, idx) => {
+    const parts = line.split(/,|\t/);
+    if (parts.length < 2) { errors.push(`Line ${idx+1}: expected "Name, Points"`); return; }
+    const name     = parts.slice(0, parts.length - 1).join(',').trim();
+    const scoreRaw = parts[parts.length - 1].trim();
+    const score    = Number(scoreRaw);
+    if (!name) { errors.push(`Line ${idx+1}: empty name`); return; }
+    if (isNaN(score) || score < 0) { errors.push(`Line ${idx+1}: invalid score "${scoreRaw}"`); return; }
+    valid.push({ name, points: score });
+  });
+  return { valid, errors };
+}
+
+function previewCSV() {
+  const raw  = document.getElementById('csv-input').value;
+  const hint = document.getElementById('csv-hint');
+  if (!raw.trim()) { hint.textContent = ''; return; }
+  const { valid, errors } = parseCSVLines(raw);
+  hint.textContent = `${valid.length} valid${errors.length ? ', ' + errors.length + ' error(s)' : ''}`;
+}
+
+function importCSV() {
+  const raw = document.getElementById('csv-input').value;
+  hideError();
+  const { valid, errors } = parseCSVLines(raw);
+  if (!valid.length) { showError(errors[0] || 'No valid teams found.'); return; }
+  const dupes = [], toAdd = [];
+  const seen  = new Set(teams.map(t => t.name.toLowerCase()));
+  for (const t of valid) {
+    const key = t.name.toLowerCase();
+    if (seen.has(key)) { dupes.push(t.name); }
+    else { seen.add(key); toAdd.push(t); }
+  }
+  toAdd.forEach(t => teams.push({ id: teamIdCounter++, name: t.name, points: t.points }));
+  document.getElementById('csv-input').value = '';
+  document.getElementById('csv-hint').textContent = '';
+  renderTeamList();
+  const msgs = [];
+  if (toAdd.length)  msgs.push(`${toAdd.length} imported`);
+  if (dupes.length)  msgs.push(`${dupes.length} duplicate(s) skipped`);
+  if (errors.length) msgs.push(`${errors.length} line(s) had errors`);
+  if (dupes.length || errors.length) showError(msgs.join(', '));
+  switchTab('manual');
+}
+
+// --- Pairing Engine ---
+function generateDraw() {
+  if (teams.length < 2) return;
+  // Carry entry index as seed so equal-points teams sort stably
+  let working = teams.map((t, i) => ({ name: t.name, points: t.points, seed: i, pullup: false, originalPoints: null }));
+  let byeTeam = null;
+  if (working.length % 2 !== 0) {
+    // Give bye to the lowest-scored, latest-entered team
+    working.sort((a, b) => a.points - b.points || b.seed - a.seed);
+    byeTeam = working.shift();
+  }
+  // Sort by points desc; use entry order as stable tiebreaker within bracket
+  working.sort((a, b) => b.points - a.points || a.seed - b.seed);
+  const brackets = buildBrackets(working);
+  resolveOddBrackets(brackets);
+  let pairings = generateFoldPairings(brackets);
+  pairings = oneUpOneDown(pairings);
+  renderDraw(pairings, byeTeam);
+}
+
+function buildBrackets(sorted) {
+  const map = new Map();
+  for (const t of sorted) {
+    if (!map.has(t.points)) map.set(t.points, []);
+    map.get(t.points).push(t);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([points, teams]) => ({ points, teams: [...teams] }));
+}
+
+function resolveOddBrackets(brackets) {
+  for (let i = 0; i < brackets.length; i++) {
+    if (brackets[i].teams.length % 2 !== 0) {
+      const next = brackets[i + 1];
+      if (!next || !next.teams.length) continue;
+      const pulled = next.teams.shift();
+      pulled.pullup = true;
+      pulled.originalPoints = pulled.points;
+      pulled.points = brackets[i].points;
+      brackets[i].teams.push(pulled);
+    }
+  }
+  for (let i = brackets.length - 1; i >= 0; i--) {
+    if (!brackets[i].teams.length) brackets.splice(i, 1);
+  }
+}
+
+function generateFoldPairings(brackets) {
+  const pairings = [];
+  for (const bracket of brackets) {
+    const t = bracket.teams, half = t.length / 2;
+    for (let i = 0; i < half; i++) {
+      pairings.push({ bracketPoints: bracket.points, aff: t[i], neg: t[t.length - 1 - i], conflictFlag: null, swapped: false });
+    }
+  }
+  return pairings;
+}
+
+// --- One-up one-down ---
+function detectConflict(a, b) {
+  return a.name.split(' ')[0].toLowerCase() === b.name.split(' ')[0].toLowerCase();
+}
+
+function oneUpOneDown(pairings) {
+  const n = pairings.length, swapped = new Set();
+  for (let i = 0; i < n; i++) {
+    const p = pairings[i];
+    if (!detectConflict(p.aff, p.neg) || swapped.has(i)) continue;
+    let resolved = false;
+    if (i > 0 && !swapped.has(i - 1)) {
+      const prev = pairings[i - 1];
+      const tmp = p.neg; p.neg = prev.neg; prev.neg = tmp;
+      if (!detectConflict(p.aff, p.neg) && !detectConflict(prev.aff, prev.neg)) {
+        p.swapped = prev.swapped = true; p.conflictFlag = 'inst';
+        swapped.add(i); swapped.add(i - 1); resolved = true;
+      } else { prev.neg = p.neg; p.neg = tmp; }
+    }
+    if (!resolved && i < n - 1 && !swapped.has(i + 1)) {
+      const next = pairings[i + 1];
+      const tmp = p.neg; p.neg = next.neg; next.neg = tmp;
+      if (!detectConflict(p.aff, p.neg) && !detectConflict(next.aff, next.neg)) {
+        p.swapped = next.swapped = true; p.conflictFlag = 'inst';
+        swapped.add(i); swapped.add(i + 1); resolved = true;
+      } else { next.neg = p.neg; p.neg = tmp; }
+    }
+    if (!resolved) p.conflictFlag = 'unresolved';
+  }
+  return pairings;
+}
+
+// --- Render ---
+function renderDraw(pairings, byeTeam) {
+  const output    = document.getElementById('draw-output');
+  const container = document.getElementById('draw-pairings');
+  document.getElementById('draw-meta').textContent =
+    `${pairings.length} debate${pairings.length !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`;
+  container.innerHTML = '';
+  let currentBracket = null, room = 1;
+  pairings.forEach(p => {
+    if (p.bracketPoints !== currentBracket) {
+      currentBracket = p.bracketPoints;
+      const lbl = document.createElement('div');
+      lbl.className = 'bracket-label';
+      lbl.textContent = `— ${currentBracket} pt${currentBracket !== 1 ? 's' : ''} —`;
+      container.appendChild(lbl);
+    }
+    const affPts  = p.aff.pullup ? p.aff.originalPoints : p.aff.points;
+    const negPts  = p.neg.pullup ? p.neg.originalPoints : p.neg.points;
+    const affName = escapeHtml(p.aff.name) + (p.aff.pullup ? ' ↑' : '');
+    const negName = escapeHtml(p.neg.name) + (p.neg.pullup ? ' ↑' : '');
+    const flagHtml = p.conflictFlag === 'unresolved'
+      ? `<span class="flag">⚠</span>`
+      : p.swapped ? `<span class="swapped-flag">[swapped]</span>` : '';
+    const row = document.createElement('div');
+    row.className = 'pairing-row';
+    row.innerHTML = `
+      <span class="room-num">Room ${room++}</span>
+      <span class="p-team${p.aff.pullup ? ' pullup' : ''}">${affName}</span>
+      <span class="p-pts">${affPts}</span>
+      <span class="p-vs">vs</span>
+      <span class="p-team${p.neg.pullup ? ' pullup' : ''}">${negName}</span>
+      <span class="p-pts">${negPts}</span>
+      ${flagHtml}
+    `;
+    container.appendChild(row);
+  });
+  if (byeTeam) {
+    const lbl = document.createElement('div');
+    lbl.className = 'bracket-label';
+    lbl.textContent = '— bye —';
+    container.appendChild(lbl);
+    const row = document.createElement('div');
+    row.className = 'pairing-row';
+    row.innerHTML = `<span class="room-num">Bye</span><span>${escapeHtml(byeTeam.name)}</span><span class="p-pts" style="margin-left:6px">${byeTeam.points}</span>`;
+    container.appendChild(row);
+  }
+  output.style.display = 'block';
+  output.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+renderTeamList();
+</script>
+</body>
+</html>
