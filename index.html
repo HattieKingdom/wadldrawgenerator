@@ -6,104 +6,85 @@
 <title>Draw Generator</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: monospace;
-    font-size: 14px;
-    background: #fff;
-    color: #000;
-    padding: 24px;
-    max-width: 640px;
-  }
-
+  body { font-family: monospace; font-size: 14px; background: #fff; color: #000; padding: 24px; max-width: 700px; }
   h1 { font-size: 16px; margin-bottom: 16px; }
-
   hr { border: none; border-top: 1px solid #ccc; margin: 16px 0; }
 
   .tabs { display: flex; gap: 16px; margin-bottom: 10px; }
   .tab { background: none; border: none; font: inherit; cursor: pointer; padding: 0; color: #999; }
   .tab.active { color: #000; text-decoration: underline; }
 
-  .row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .row { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .row label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: #666; }
+  .row label input { font: inherit; border: 1px solid #999; padding: 4px 6px; background: #fff; color: #000; }
+  .row label.grow { flex: 1; }
+  .row label.pts input { width: 60px; }
 
-  input[type="text"], input[type="number"], textarea {
-    font: inherit;
-    border: 1px solid #999;
-    padding: 4px 6px;
-    background: #fff;
-    color: #000;
+  input[type="text"], input[type="number"], textarea, select {
+    font: inherit; border: 1px solid #999; padding: 4px 6px; background: #fff; color: #000;
   }
-
-  input[type="text"] { flex: 1; }
-  input[type="number"] { width: 70px; }
-
-  textarea {
-    width: 100%;
-    height: 120px;
-    resize: vertical;
-    display: block;
-  }
+  textarea { width: 100%; height: 140px; resize: vertical; display: block; }
 
   button.action {
-    font: inherit;
-    background: #000;
-    color: #fff;
-    border: none;
-    padding: 4px 12px;
-    cursor: pointer;
+    font: inherit; background: #000; color: #fff; border: none; padding: 4px 12px; cursor: pointer; align-self: flex-end;
   }
-
   button.action:disabled { background: #ccc; cursor: default; }
   button.action:not(:disabled):hover { background: #333; }
 
-  button.link {
-    font: inherit;
-    background: none;
-    border: none;
-    color: #999;
-    cursor: pointer;
-    padding: 0;
-    font-size: 12px;
-  }
-
+  button.link { font: inherit; background: none; border: none; color: #999; cursor: pointer; padding: 0; font-size: 12px; }
   button.link:hover { color: #c00; }
 
   #error { color: #c00; font-size: 12px; margin-top: 6px; display: none; }
-
   #team-list { margin-top: 10px; }
 
   .team-row {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
     padding: 3px 0;
     border-bottom: 1px solid #eee;
+    gap: 8px;
   }
+  .team-row-info { font-size: 13px; }
+  .team-row-meta { font-size: 11px; color: #666; }
 
   #team-count { font-size: 12px; color: #666; margin-top: 6px; }
   #team-count.warn { color: #c00; }
-
   #generate-btn { margin-top: 12px; width: 100%; padding: 8px; }
 
+  /* Draw output */
   #draw-output { display: none; }
 
-  .bracket-label { font-size: 12px; color: #666; margin: 14px 0 4px; }
+  .venue-heading {
+    font-size: 15px;
+    font-weight: bold;
+    margin: 20px 0 4px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #000;
+  }
+  .timeslot-heading {
+    font-size: 12px;
+    color: #444;
+    margin: 12px 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .bracket-label { font-size: 12px; color: #666; margin: 10px 0 2px; }
 
   .pairing-row {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    padding: 5px 0;
-    border-bottom: 1px solid #eee;
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid #eee;
   }
-
   .room-num { color: #999; font-size: 12px; min-width: 52px; }
   .p-team { flex: 1; }
-  .p-pts   { color: #666; font-size: 12px; min-width: 28px; text-align: right; }
-  .p-vs    { color: #999; }
-  .pullup  { color: #00a; }
-  .flag    { font-size: 11px; color: #c00; }
+  .p-pts  { color: #666; font-size: 12px; min-width: 28px; text-align: right; }
+  .p-vs   { color: #999; }
+  .pullup { color: #00a; }
+  .flag   { font-size: 11px; color: #c00; }
   .swapped-flag { font-size: 11px; color: #666; }
+
+  .csv-hint-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .csv-format { font-size: 11px; color: #666; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -119,16 +100,27 @@
 <!-- Manual pane -->
 <div id="pane-manual">
   <div class="row">
-    <input type="text" id="team-name-input" placeholder="Team name" onkeydown="handleEnter(event)">
-    <input type="number" id="team-score-input" placeholder="pts" min="0" onkeydown="handleEnter(event)">
+    <label class="grow">Name
+      <input type="text" id="m-name" placeholder="Team name" onkeydown="handleEnter(event)">
+    </label>
+    <label class="pts">Pts
+      <input type="number" id="m-pts" placeholder="0" min="0" onkeydown="handleEnter(event)">
+    </label>
+    <label>Venue
+      <input type="text" id="m-venue" placeholder="e.g. Leeming" onkeydown="handleEnter(event)">
+    </label>
+    <label>Timeslot
+      <input type="text" id="m-timeslot" placeholder="e.g. 5:15pm" onkeydown="handleEnter(event)">
+    </label>
     <button class="action" onclick="addTeam()">Add</button>
   </div>
 </div>
 
 <!-- CSV pane -->
 <div id="pane-csv" style="display:none">
-  <textarea id="csv-input" placeholder="Oxford A, 3&#10;Cambridge B, 3&#10;Bristol A, 2" oninput="previewCSV()"></textarea>
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px">
+  <p class="csv-format">Format: <strong>Team Name, Points, Venue, Timeslot</strong> — one team per line</p>
+  <textarea id="csv-input" placeholder="Oxford A, 3, Leeming, 5:15pm&#10;Cambridge B, 3, Leeming, 5:15pm&#10;Bristol A, 2, Perth Modern, 6:15pm" oninput="previewCSV()"></textarea>
+  <div class="csv-hint-row">
     <span id="csv-hint" style="font-size:12px; color:#666"></span>
     <button class="action" onclick="importCSV()">Import</button>
   </div>
@@ -142,7 +134,7 @@
 <hr>
 
 <div id="draw-output">
-  <strong id="draw-title">Draw</strong>
+  <strong>Draw</strong>
   <span id="draw-meta" style="color:#666; font-size:12px; margin-left:8px"></span>
   <div id="draw-pairings"></div>
   <p style="font-size:11px; color:#999; margin-top:12px">↑ pulled up &nbsp;·&nbsp; [swapped] conflict swap &nbsp;·&nbsp; ⚠ conflict unresolved</p>
@@ -163,18 +155,20 @@ function switchTab(tab) {
 
 // --- Teams ---
 function addTeam() {
-  const nameInput  = document.getElementById('team-name-input');
-  const scoreInput = document.getElementById('team-score-input');
-  const name  = nameInput.value.trim();
-  const score = scoreInput.value.trim();
+  const name     = document.getElementById('m-name').value.trim();
+  const score    = document.getElementById('m-pts').value.trim();
+  const venue    = document.getElementById('m-venue').value.trim();
+  const timeslot = document.getElementById('m-timeslot').value.trim();
   hideError();
-  if (!name) { showError('Enter a team name.'); return; }
+  if (!name)    { showError('Enter a team name.'); return; }
   if (score === '' || isNaN(Number(score)) || Number(score) < 0) { showError('Enter a valid score.'); return; }
+  if (!venue)   { showError('Enter a venue.'); return; }
+  if (!timeslot){ showError('Enter a timeslot.'); return; }
   if (teams.find(t => t.name.toLowerCase() === name.toLowerCase())) { showError(`"${name}" already exists.`); return; }
-  teams.push({ id: teamIdCounter++, name, points: Number(score) });
-  nameInput.value = '';
-  scoreInput.value = '';
-  nameInput.focus();
+
+  teams.push({ id: teamIdCounter++, name, points: Number(score), venue, timeslot });
+  ['m-name','m-pts','m-venue','m-timeslot'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('m-name').focus();
   renderTeamList();
 }
 
@@ -194,13 +188,9 @@ function handleEnter(e) { if (e.key === 'Enter') addTeam(); }
 
 function showError(msg) {
   const el = document.getElementById('error');
-  el.textContent = msg;
-  el.style.display = 'block';
+  el.textContent = msg; el.style.display = 'block';
 }
-
-function hideError() {
-  document.getElementById('error').style.display = 'none';
-}
+function hideError() { document.getElementById('error').style.display = 'none'; }
 
 function renderTeamList() {
   const list    = document.getElementById('team-list');
@@ -208,17 +198,24 @@ function renderTeamList() {
   const btn     = document.getElementById('generate-btn');
   list.innerHTML = '';
   if (!teams.length) { countEl.textContent = ''; btn.disabled = true; return; }
-  const sorted = [...teams].sort((a, b) => b.points - a.points);
+
+  const sorted = [...teams].sort((a, b) =>
+    a.venue.localeCompare(b.venue) || a.timeslot.localeCompare(b.timeslot) || b.points - a.points
+  );
   sorted.forEach(t => {
     const row = document.createElement('div');
     row.className = 'team-row';
-    row.innerHTML = `<span>${escapeHtml(t.name)} — ${t.points}</span>
-                     <button class="link" onclick="removeTeam(${t.id})">remove</button>`;
+    row.innerHTML = `
+      <div>
+        <div class="team-row-info">${escapeHtml(t.name)} — ${t.points}</div>
+        <div class="team-row-meta">${escapeHtml(t.venue)} · ${escapeHtml(t.timeslot)}</div>
+      </div>
+      <button class="link" onclick="removeTeam(${t.id})">remove</button>`;
     list.appendChild(row);
   });
-  const odd = teams.length % 2 !== 0;
-  countEl.textContent = `${teams.length} team${teams.length !== 1 ? 's' : ''}${odd ? ' — odd, one team gets a bye' : ''}`;
-  countEl.className = odd ? 'warn' : '';
+
+  countEl.textContent = `${teams.length} team${teams.length !== 1 ? 's' : ''}`;
+  countEl.className = '';
   btn.disabled = teams.length < 2;
 }
 
@@ -231,20 +228,27 @@ function parseCSVLines(raw) {
   const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const valid = [], errors = [];
   lines.forEach((line, idx) => {
-    const parts = line.split(/,|\t/);
-    if (parts.length < 2) { errors.push(`Line ${idx+1}: expected "Name, Points"`); return; }
-    const name     = parts.slice(0, parts.length - 1).join(',').trim();
-    const scoreRaw = parts[parts.length - 1].trim();
+    const parts = line.split(/,|\t/).map(p => p.trim());
+    if (parts.length < 4) { errors.push(`Line ${idx+1}: need Name, Points, Venue, Timeslot`); return; }
+    // Last two are timeslot and venue; second-to-last is score; everything before is name
+    const timeslot = parts[parts.length - 1];
+    const venue    = parts[parts.length - 2];
+    const scoreRaw = parts[parts.length - 3];
+    const name     = parts.slice(0, parts.length - 3).join(',').trim() || parts[0];
+    // Handle exactly 4 parts cleanly
+    const name4    = parts.length === 4 ? parts[0] : name;
     const score    = Number(scoreRaw);
-    if (!name) { errors.push(`Line ${idx+1}: empty name`); return; }
-    if (isNaN(score) || score < 0) { errors.push(`Line ${idx+1}: invalid score "${scoreRaw}"`); return; }
-    valid.push({ name, points: score });
+    if (!name4)               { errors.push(`Line ${idx+1}: empty name`); return; }
+    if (isNaN(score)||score<0){ errors.push(`Line ${idx+1}: invalid score "${scoreRaw}"`); return; }
+    if (!venue)               { errors.push(`Line ${idx+1}: empty venue`); return; }
+    if (!timeslot)            { errors.push(`Line ${idx+1}: empty timeslot`); return; }
+    valid.push({ name: name4, points: score, venue, timeslot });
   });
   return { valid, errors };
 }
 
 function previewCSV() {
-  const raw  = document.getElementById('csv-input').value;
+  const raw = document.getElementById('csv-input').value;
   const hint = document.getElementById('csv-hint');
   if (!raw.trim()) { hint.textContent = ''; return; }
   const { valid, errors } = parseCSVLines(raw);
@@ -257,13 +261,13 @@ function importCSV() {
   const { valid, errors } = parseCSVLines(raw);
   if (!valid.length) { showError(errors[0] || 'No valid teams found.'); return; }
   const dupes = [], toAdd = [];
-  const seen  = new Set(teams.map(t => t.name.toLowerCase()));
+  const seen = new Set(teams.map(t => t.name.toLowerCase()));
   for (const t of valid) {
     const key = t.name.toLowerCase();
     if (seen.has(key)) { dupes.push(t.name); }
     else { seen.add(key); toAdd.push(t); }
   }
-  toAdd.forEach(t => teams.push({ id: teamIdCounter++, name: t.name, points: t.points }));
+  toAdd.forEach(t => teams.push({ id: teamIdCounter++, ...t }));
   document.getElementById('csv-input').value = '';
   document.getElementById('csv-hint').textContent = '';
   renderTeamList();
@@ -276,23 +280,63 @@ function importCSV() {
 }
 
 // --- Pairing Engine ---
-function generateDraw() {
-  if (teams.length < 2) return;
-  // Carry entry index as seed so equal-points teams sort stably
-  let working = teams.map((t, i) => ({ name: t.name, points: t.points, seed: i, pullup: false, originalPoints: null }));
+
+// Run an independent draw for one venue+timeslot group
+function runSubDraw(groupTeams) {
+  let working = groupTeams.map((t, i) => ({
+    name: t.name, points: t.points, venue: t.venue, timeslot: t.timeslot,
+    seed: i, pullup: false, originalPoints: null
+  }));
+
   let byeTeam = null;
   if (working.length % 2 !== 0) {
-    // Give bye to the lowest-scored, latest-entered team
     working.sort((a, b) => a.points - b.points || b.seed - a.seed);
     byeTeam = working.shift();
   }
-  // Sort by points desc; use entry order as stable tiebreaker within bracket
+
   working.sort((a, b) => b.points - a.points || a.seed - b.seed);
   const brackets = buildBrackets(working);
   resolveOddBrackets(brackets);
   let pairings = generateFoldPairings(brackets);
   pairings = oneUpOneDown(pairings);
-  renderDraw(pairings, byeTeam);
+  pairings = balanceSides(pairings);
+  return { pairings, byeTeam };
+}
+
+function generateDraw() {
+  if (teams.length < 2) return;
+
+  // Group by venue, then timeslot
+  const venueMap = new Map();
+  for (const t of teams) {
+    const vKey = t.venue.trim().toLowerCase();
+    if (!venueMap.has(vKey)) venueMap.set(vKey, { label: t.venue, slots: new Map() });
+    const slotMap = venueMap.get(vKey).slots;
+    const sKey = t.timeslot.trim().toLowerCase();
+    if (!slotMap.has(sKey)) slotMap.set(sKey, { label: t.timeslot, teams: [] });
+    slotMap.get(sKey).teams.push(t);
+  }
+
+  // Sort venues and timeslots alphabetically
+  const venues = Array.from(venueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  for (const v of venues) {
+    v.slots = Array.from(v.slots.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  // Run sub-draw for each venue+timeslot
+  const results = [];
+  let totalDebates = 0;
+  for (const venue of venues) {
+    const slotResults = [];
+    for (const slot of venue.slots) {
+      const { pairings, byeTeam } = runSubDraw(slot.teams);
+      slotResults.push({ label: slot.label, pairings, byeTeam });
+      totalDebates += pairings.length;
+    }
+    results.push({ label: venue.label, slots: slotResults });
+  }
+
+  renderDraw(results, totalDebates);
 }
 
 function buildBrackets(sorted) {
@@ -328,90 +372,211 @@ function generateFoldPairings(brackets) {
   for (const bracket of brackets) {
     const t = bracket.teams, half = t.length / 2;
     for (let i = 0; i < half; i++) {
-      pairings.push({ bracketPoints: bracket.points, aff: t[i], neg: t[t.length - 1 - i], conflictFlag: null, swapped: false });
+      pairings.push({
+        bracketPoints: bracket.points,
+        aff: t[i], neg: t[t.length - 1 - i],
+        conflictFlag: null, swapped: false
+      });
     }
   }
   return pairings;
 }
 
-// --- One-up one-down ---
-function detectConflict(a, b) {
-  return a.name.split(' ')[0].toLowerCase() === b.name.split(' ')[0].toLowerCase();
+// --- Side balancing ---
+// After all pairings are generated, count aff/neg appearances per school
+// and flip sides in any pairing where doing so reduces imbalance.
+function balanceSides(pairings) {
+  // Count aff and neg appearances per school across all pairings
+  function getSideCounts(pairings) {
+    const counts = {}; // school -> { aff, neg }
+    for (const p of pairings) {
+      const sa = schoolOf(p.aff), sn = schoolOf(p.neg);
+      if (!counts[sa]) counts[sa] = { aff: 0, neg: 0 };
+      if (!counts[sn]) counts[sn] = { aff: 0, neg: 0 };
+      counts[sa].aff++;
+      counts[sn].neg++;
+    }
+    return counts;
+  }
+
+  // Imbalance score: sum of |aff - neg| across all schools. Lower is better.
+  function imbalance(counts) {
+    return Object.values(counts).reduce((sum, c) => sum + Math.abs(c.aff - c.neg), 0);
+  }
+
+  // Iteratively flip pairings that reduce total imbalance
+  let improved = true;
+  while (improved) {
+    improved = false;
+    const counts = getSideCounts(pairings);
+    const before = imbalance(counts);
+
+    for (const p of pairings) {
+      const sa = schoolOf(p.aff), sn = schoolOf(p.neg);
+      // Simulate a flip
+      counts[sa].aff--; counts[sa].neg++;
+      counts[sn].neg--; counts[sn].aff++;
+      if (imbalance(counts) < before) {
+        // Commit flip
+        const tmp = p.aff; p.aff = p.neg; p.neg = tmp;
+        improved = true;
+      } else {
+        // Undo
+        counts[sa].aff++; counts[sa].neg--;
+        counts[sn].neg++; counts[sn].aff--;
+      }
+    }
+  }
+
+  return pairings;
+}
+
+// --- Conflict avoidance ---
+function schoolOf(team) { return team.name.split(' ')[0].toLowerCase(); }
+function sameSchool(a, b) { return schoolOf(a) === schoolOf(b); }
+function matchupKey(a, b) { const s = [schoolOf(a), schoolOf(b)].sort(); return s[0]+'|'+s[1]; }
+
+function buildMatchupCounts(pairings) {
+  const counts = {};
+  for (const p of pairings) { const k = matchupKey(p.aff,p.neg); counts[k]=(counts[k]||0)+1; }
+  return counts;
+}
+
+function trySwap(pairings, i, j, counts) {
+  const pi = pairings[i], pj = pairings[j];
+  const oldI = matchupKey(pi.aff,pi.neg), oldJ = matchupKey(pj.aff,pj.neg);
+  const newI = matchupKey(pi.aff,pj.neg), newJ = matchupKey(pj.aff,pi.neg);
+  if (sameSchool(pi.aff,pj.neg) || sameSchool(pj.aff,pi.neg)) return false;
+  const repeats = c => Object.values(c).filter(v=>v>1).reduce((a,b)=>a+b,0);
+  const before = repeats(counts);
+  counts[oldI]--; if(!counts[oldI]) delete counts[oldI];
+  counts[oldJ]--; if(!counts[oldJ]) delete counts[oldJ];
+  counts[newI]=(counts[newI]||0)+1; counts[newJ]=(counts[newJ]||0)+1;
+  if (repeats(counts) <= before) {
+    const tmp=pi.neg; pi.neg=pj.neg; pj.neg=tmp;
+    pi.swapped=pj.swapped=true; return true;
+  }
+  counts[newI]--; if(!counts[newI]) delete counts[newI];
+  counts[newJ]--; if(!counts[newJ]) delete counts[newJ];
+  counts[oldI]=(counts[oldI]||0)+1; counts[oldJ]=(counts[oldJ]||0)+1;
+  return false;
 }
 
 function oneUpOneDown(pairings) {
-  const n = pairings.length, swapped = new Set();
+  const n = pairings.length;
+  const hardSwapped = new Set();
+
+  // Pass 1: fix same-school direct conflicts
   for (let i = 0; i < n; i++) {
     const p = pairings[i];
-    if (!detectConflict(p.aff, p.neg) || swapped.has(i)) continue;
+    if (!sameSchool(p.aff,p.neg) || hardSwapped.has(i)) continue;
     let resolved = false;
-    if (i > 0 && !swapped.has(i - 1)) {
-      const prev = pairings[i - 1];
-      const tmp = p.neg; p.neg = prev.neg; prev.neg = tmp;
-      if (!detectConflict(p.aff, p.neg) && !detectConflict(prev.aff, prev.neg)) {
-        p.swapped = prev.swapped = true; p.conflictFlag = 'inst';
-        swapped.add(i); swapped.add(i - 1); resolved = true;
-      } else { prev.neg = p.neg; p.neg = tmp; }
+    if (i > 0 && !hardSwapped.has(i-1)) {
+      const prev = pairings[i-1];
+      const tmp = p.neg; p.neg=prev.neg; prev.neg=tmp;
+      if (!sameSchool(p.aff,p.neg) && !sameSchool(prev.aff,prev.neg)) {
+        p.swapped=prev.swapped=true; p.conflictFlag='inst';
+        hardSwapped.add(i); hardSwapped.add(i-1); resolved=true;
+      } else { prev.neg=p.neg; p.neg=tmp; }
     }
-    if (!resolved && i < n - 1 && !swapped.has(i + 1)) {
-      const next = pairings[i + 1];
-      const tmp = p.neg; p.neg = next.neg; next.neg = tmp;
-      if (!detectConflict(p.aff, p.neg) && !detectConflict(next.aff, next.neg)) {
-        p.swapped = next.swapped = true; p.conflictFlag = 'inst';
-        swapped.add(i); swapped.add(i + 1); resolved = true;
-      } else { next.neg = p.neg; p.neg = tmp; }
+    if (!resolved && i<n-1 && !hardSwapped.has(i+1)) {
+      const next = pairings[i+1];
+      const tmp = p.neg; p.neg=next.neg; next.neg=tmp;
+      if (!sameSchool(p.aff,p.neg) && !sameSchool(next.aff,next.neg)) {
+        p.swapped=next.swapped=true; p.conflictFlag='inst';
+        hardSwapped.add(i); hardSwapped.add(i+1); resolved=true;
+      } else { next.neg=p.neg; p.neg=tmp; }
     }
-    if (!resolved) p.conflictFlag = 'unresolved';
+    if (!resolved) p.conflictFlag='unresolved';
   }
+
+  // Pass 2: reduce repeated school matchups
+  let improved=true, itr=0;
+  while (improved && itr<20) {
+    improved=false; itr++;
+    const counts = buildMatchupCounts(pairings);
+    const repeated = Object.keys(counts).find(k=>counts[k]>1);
+    if (!repeated) break;
+    for (let i=0; i<n; i++) {
+      if (matchupKey(pairings[i].aff,pairings[i].neg)!==repeated) continue;
+      for (let j=0; j<n; j++) {
+        if (i===j) continue;
+        if (trySwap(pairings,i,j,buildMatchupCounts(pairings))) { improved=true; break; }
+      }
+      if (improved) break;
+    }
+  }
+
   return pairings;
 }
 
 // --- Render ---
-function renderDraw(pairings, byeTeam) {
+function renderDraw(results, totalDebates) {
   const output    = document.getElementById('draw-output');
   const container = document.getElementById('draw-pairings');
   document.getElementById('draw-meta').textContent =
-    `${pairings.length} debate${pairings.length !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`;
+    `${totalDebates} debate${totalDebates!==1?'s':''} · ${new Date().toLocaleTimeString()}`;
   container.innerHTML = '';
-  let currentBracket = null, room = 1;
-  pairings.forEach(p => {
-    if (p.bracketPoints !== currentBracket) {
-      currentBracket = p.bracketPoints;
-      const lbl = document.createElement('div');
-      lbl.className = 'bracket-label';
-      lbl.textContent = `— ${currentBracket} pt${currentBracket !== 1 ? 's' : ''} —`;
-      container.appendChild(lbl);
+
+  let room = 1;
+
+  for (const venue of results) {
+    const vh = document.createElement('div');
+    vh.className = 'venue-heading';
+    vh.textContent = venue.label;
+    container.appendChild(vh);
+
+    for (const slot of venue.slots) {
+      const sh = document.createElement('div');
+      sh.className = 'timeslot-heading';
+      sh.textContent = slot.label;
+      container.appendChild(sh);
+
+      let currentBracket = null;
+
+      slot.pairings.forEach(p => {
+        if (p.bracketPoints !== currentBracket) {
+          currentBracket = p.bracketPoints;
+          const lbl = document.createElement('div');
+          lbl.className = 'bracket-label';
+          lbl.textContent = `— ${currentBracket} pt${currentBracket!==1?'s':''} —`;
+          container.appendChild(lbl);
+        }
+
+        const affPts  = p.aff.pullup ? p.aff.originalPoints : p.aff.points;
+        const negPts  = p.neg.pullup ? p.neg.originalPoints : p.neg.points;
+        const affName = escapeHtml(p.aff.name) + (p.aff.pullup ? ' ↑' : '');
+        const negName = escapeHtml(p.neg.name) + (p.neg.pullup ? ' ↑' : '');
+        const flagHtml = p.conflictFlag==='unresolved'
+          ? `<span class="flag">⚠</span>`
+          : p.swapped ? `<span class="swapped-flag">[swapped]</span>` : '';
+
+        const row = document.createElement('div');
+        row.className = 'pairing-row';
+        row.innerHTML = `
+          <span class="room-num">Room ${room++}</span>
+          <span class="p-team${p.aff.pullup?' pullup':''}">${affName}</span>
+          <span class="p-pts">${affPts}</span>
+          <span class="p-vs">vs</span>
+          <span class="p-team${p.neg.pullup?' pullup':''}">${negName}</span>
+          <span class="p-pts">${negPts}</span>
+          ${flagHtml}`;
+        container.appendChild(row);
+      });
+
+      if (slot.byeTeam) {
+        const lbl = document.createElement('div');
+        lbl.className = 'bracket-label';
+        lbl.textContent = '— bye —';
+        container.appendChild(lbl);
+        const row = document.createElement('div');
+        row.className = 'pairing-row';
+        row.innerHTML = `<span class="room-num">Bye</span><span>${escapeHtml(slot.byeTeam.name)}</span><span class="p-pts" style="margin-left:6px">${slot.byeTeam.points}</span>`;
+        container.appendChild(row);
+      }
     }
-    const affPts  = p.aff.pullup ? p.aff.originalPoints : p.aff.points;
-    const negPts  = p.neg.pullup ? p.neg.originalPoints : p.neg.points;
-    const affName = escapeHtml(p.aff.name) + (p.aff.pullup ? ' ↑' : '');
-    const negName = escapeHtml(p.neg.name) + (p.neg.pullup ? ' ↑' : '');
-    const flagHtml = p.conflictFlag === 'unresolved'
-      ? `<span class="flag">⚠</span>`
-      : p.swapped ? `<span class="swapped-flag">[swapped]</span>` : '';
-    const row = document.createElement('div');
-    row.className = 'pairing-row';
-    row.innerHTML = `
-      <span class="room-num">Room ${room++}</span>
-      <span class="p-team${p.aff.pullup ? ' pullup' : ''}">${affName}</span>
-      <span class="p-pts">${affPts}</span>
-      <span class="p-vs">vs</span>
-      <span class="p-team${p.neg.pullup ? ' pullup' : ''}">${negName}</span>
-      <span class="p-pts">${negPts}</span>
-      ${flagHtml}
-    `;
-    container.appendChild(row);
-  });
-  if (byeTeam) {
-    const lbl = document.createElement('div');
-    lbl.className = 'bracket-label';
-    lbl.textContent = '— bye —';
-    container.appendChild(lbl);
-    const row = document.createElement('div');
-    row.className = 'pairing-row';
-    row.innerHTML = `<span class="room-num">Bye</span><span>${escapeHtml(byeTeam.name)}</span><span class="p-pts" style="margin-left:6px">${byeTeam.points}</span>`;
-    container.appendChild(row);
   }
+
   output.style.display = 'block';
   output.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
